@@ -1,0 +1,1825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SwiftPass VMS — Visitor Check-in & Check-out Experience</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff6ff',
+              100: '#dbeafe',
+              500: '#2563eb',
+              600: '#1d4ed8',
+              700: '#1e40af',
+            },
+            status: {
+              pending: '#f59e0b',
+              pendingBg: '#fef3c7',
+              approved: '#10b981',
+              approvedBg: '#d1fae5',
+              checkedIn: '#0284c7',
+              checkedInBg: '#e0f2fe',
+              rejected: '#ef4444',
+              rejectedBg: '#fee2e2',
+              checkedOut: '#64748b',
+              checkedOutBg: '#f1f5f9',
+            }
+          },
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          }
+        }
+      }
+    }
+  </script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.05);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.15);
+      border-radius: 9999px;
+    }
+    /* Realistic iPhone frame shadow */
+    .iphone-case {
+      box-shadow: 0 25px 60px -15px rgba(15, 23, 42, 0.25), 0 0 0 12px #1e293b, 0 0 0 14px #334155;
+    }
+    /* Ticket notch effect for visitor pass */
+    .pass-notch-left {
+      position: absolute;
+      left: -12px;
+      top: 68%;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #f8fafc;
+    }
+    .pass-notch-right {
+      position: absolute;
+      right: -12px;
+      top: 68%;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #f8fafc;
+    }
+    /* Shimmer effect for pending pulse */
+    @keyframes radarPulse {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.2; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .radar-pulse {
+      animation: radarPulse 2.5s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Top Navigation & Presentation Toolbar -->
+  <header class="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50 px-4 py-3">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/30">
+          <i data-lucide="shield-check" class="w-6 h-6"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-base font-bold text-white">SwiftPass VMS</h1>
+            <span class="text-[11px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">Figma Assignment Ready</span>
+          </div>
+          <p class="text-xs text-slate-400">Visitor Check-in & Check-out Mobile Web Journey</p>
+        </div>
+      </div>
+
+      <!-- View Tabs -->
+      <div class="flex items-center bg-slate-900 border border-slate-800 p-1 rounded-xl text-xs font-medium">
+        <button id="tab-interactive" onclick="switchMainTab('interactive')" class="tab-btn px-3 py-1.5 rounded-lg bg-blue-600 text-white font-semibold transition">
+          <i data-lucide="smartphone" class="w-3.5 h-3.5 inline mr-1"></i> Interactive Prototype
+        </button>
+        <button id="tab-mockup" onclick="switchMainTab('mockup')" class="tab-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition">
+          <i data-lucide="image" class="w-3.5 h-3.5 inline mr-1"></i> Figma Mockup UI
+        </button>
+        <button id="tab-grid" onclick="switchMainTab('grid')" class="tab-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition">
+          <i data-lucide="layout-grid" class="w-3.5 h-3.5 inline mr-1"></i> All Screens (Grid)
+        </button>
+        <button id="tab-flow" onclick="switchMainTab('flow')" class="tab-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition">
+          <i data-lucide="git-branch" class="w-3.5 h-3.5 inline mr-1"></i> User Flow & IA
+        </button>
+        <button id="tab-figma" onclick="switchMainTab('figma')" class="tab-btn px-3 py-1.5 rounded-lg text-slate-400 hover:text-white transition">
+          <i data-lucide="figma" class="w-3.5 h-3.5 inline mr-1"></i> Figma Specs & Rationale
+        </button>
+      </div>
+
+      <!-- Quick Actions -->
+      <div class="flex items-center gap-2">
+        <button onclick="resetDemo()" class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition" title="Restart visitor flow from Entrance QR">
+          <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i> Restart Flow
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 flex flex-col p-4 lg:p-6 overflow-x-hidden">
+
+    <!-- VIEW 1: INTERACTIVE PROTOTYPE VIEW -->
+    <div id="view-interactive" class="flex-1 flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto w-full items-start justify-center">
+
+      <!-- Left Column: Step Navigation, Quick Jump, & State Testing Bar -->
+      <div class="w-full lg:w-80 bg-slate-950/70 border border-slate-800 rounded-2xl p-4 flex flex-col gap-4 order-2 lg:order-1">
+        <div>
+          <h2 class="text-sm font-bold text-white flex items-center gap-2">
+            <i data-lucide="sliders" class="w-4 h-4 text-blue-400"></i> Prototype Controller
+          </h2>
+          <p class="text-xs text-slate-400 mt-1">Jump directly to any screen or test critical edge-cases.</p>
+        </div>
+
+        <!-- Journey Steps -->
+        <div class="space-y-1">
+          <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Standard Visitor Flow</label>
+          <button onclick="goToScreen('entrance')" class="screen-nav-btn w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition" data-screen="entrance">
+            <span class="flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold">1</span> Entrance QR Poster</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-50"></i>
+          </button>
+          <button onclick="goToScreen('phone')" class="screen-nav-btn w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition" data-screen="phone">
+            <span class="flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold">2</span> Phone Registration</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-50"></i>
+          </button>
+          <button onclick="goToScreen('otp')" class="screen-nav-btn w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition" data-screen="otp">
+            <span class="flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold">3</span> OTP Verification</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-50"></i>
+          </button>
+          <button onclick="goToScreen('details')" class="screen-nav-btn w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition" data-screen="details">
+            <span class="flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold">4</span> Visitor Details & Host</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-50"></i>
+          </button>
+          <button onclick="goToScreen('review')" class="screen-nav-btn w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition" data-screen="review">
+            <span class="flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold">5</span> Review & Declaration</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-50"></i>
+          </button>
+          <button onclick="goToScreen('pending')" class="screen-nav-btn w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition" data-screen="pending">
+            <span class="flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-amber-500/20 text-amber-300 flex items-center justify-center text-[10px] font-bold">6</span> Approval Pending</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-50"></i>
+          </button>
+          <button onclick="goToScreen('pass')" class="screen-nav-btn w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition" data-screen="pass">
+            <span class="flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-blue-500/20 text-blue-300 flex items-center justify-center text-[10px] font-bold">7</span> Visitor Pass (Approved)</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-50"></i>
+          </button>
+          <button onclick="goToScreen('checkedin')" class="screen-nav-btn w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition" data-screen="checkedin">
+            <span class="flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-300 flex items-center justify-center text-[10px] font-bold">8</span> Active Checked-In Status</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-50"></i>
+          </button>
+          <button onclick="goToScreen('checkedout')" class="screen-nav-btn w-full text-left px-3 py-2 rounded-lg text-xs flex items-center justify-between text-slate-300 hover:bg-slate-800 hover:text-white transition" data-screen="checkedout">
+            <span class="flex items-center gap-2"><span class="w-5 h-5 rounded-full bg-slate-500/20 text-slate-300 flex items-center justify-center text-[10px] font-bold">9</span> Checked Out Summary</span>
+            <i data-lucide="chevron-right" class="w-3.5 h-3.5 opacity-50"></i>
+          </button>
+        </div>
+
+        <!-- Special UX States / Edge Cases -->
+        <div class="border-t border-slate-800 pt-3">
+          <label class="text-[11px] font-semibold text-rose-400 uppercase tracking-wider block mb-2 flex items-center gap-1.5">
+            <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i> Required Assignment States
+          </label>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <button onclick="setOtpState('error')" class="px-2 py-1.5 bg-rose-950/40 border border-rose-800/60 text-rose-300 rounded-lg hover:bg-rose-900/50 transition flex items-center justify-center gap-1">
+              OTP Error
+            </button>
+            <button onclick="setOtpState('expired')" class="px-2 py-1.5 bg-amber-950/40 border border-amber-800/60 text-amber-300 rounded-lg hover:bg-amber-900/50 transition flex items-center justify-center gap-1">
+              OTP Expired
+            </button>
+            <button onclick="goToScreen('rejected')" class="px-2 py-1.5 bg-rose-950/40 border border-rose-800/60 text-rose-300 rounded-lg hover:bg-rose-900/50 transition flex items-center justify-center gap-1">
+              Host Rejected
+            </button>
+            <button onclick="openCheckoutModal()" class="px-2 py-1.5 bg-slate-800 border border-slate-700 text-slate-200 rounded-lg hover:bg-slate-700 transition flex items-center justify-center gap-1">
+              Checkout Modal
+            </button>
+          </div>
+        </div>
+
+        <!-- Status Flow Pill -->
+        <div class="border-t border-slate-800 pt-3 text-[11px] text-slate-400">
+          <span class="font-medium text-slate-300">Status Flow:</span>
+          <div class="flex items-center gap-1 mt-1 text-[10px] font-semibold">
+            <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">Pending</span> &rarr;
+            <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400">Approved</span> &rarr;
+            <span class="px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400">Checked In</span> &rarr;
+            <span class="px-1.5 py-0.5 rounded bg-slate-500/20 text-slate-300">Checked Out</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Center: Realistic Mobile Device Shell (390 x 844) -->
+      <div class="order-1 lg:order-2 flex flex-col items-center">
+        <!-- Phone Device Frame -->
+        <div class="iphone-case w-[390px] h-[820px] bg-slate-900 rounded-[50px] relative overflow-hidden flex flex-col border-[3px] border-slate-700/60">
+          
+          <!-- Dynamic Island / Speaker Notch -->
+          <div class="absolute top-3 left-1/2 -translate-x-1/2 w-28 h-6 bg-black rounded-full z-50 flex items-center justify-between px-3">
+            <div class="w-2.5 h-2.5 rounded-full bg-slate-800"></div>
+            <div class="w-3 h-3 rounded-full bg-blue-950/80 border border-blue-500/40"></div>
+          </div>
+
+          <!-- iOS Status Bar -->
+          <div class="h-11 w-full bg-white flex items-end justify-between px-7 pb-1 text-slate-900 text-xs font-semibold select-none z-40 shrink-0">
+            <span id="live-clock">09:41</span>
+            <div class="flex items-center gap-1.5">
+              <i data-lucide="signal" class="w-3.5 h-3.5"></i>
+              <i data-lucide="wifi" class="w-3.5 h-3.5"></i>
+              <i data-lucide="battery-full" class="w-4 h-4"></i>
+            </div>
+          </div>
+
+          <!-- Mobile App Screen Content Area (Scrollable) -->
+          <div id="mobile-viewport" class="flex-1 bg-slate-50 text-slate-900 overflow-y-auto relative flex flex-col">
+
+            <!-- ================= SCREEN 0: ENTRANCE POSTER (SCAN QR TRIGGER) ================= -->
+            <section id="screen-entrance" class="screen-view flex-1 flex flex-col p-6 items-center justify-center text-center bg-gradient-to-b from-blue-900 via-slate-900 to-slate-950 text-white">
+              <div class="w-full max-w-xs bg-white text-slate-900 p-6 rounded-3xl shadow-2xl flex flex-col items-center border border-slate-200">
+                <div class="flex items-center gap-2 mb-2 text-blue-600 font-bold text-sm">
+                  <i data-lucide="building-2" class="w-5 h-5"></i>
+                  <span>NEXUS TOWER • RECEPTION</span>
+                </div>
+                <h3 class="text-xl font-extrabold tracking-tight text-slate-900">Welcome, Visitor</h3>
+                <p class="text-xs text-slate-500 mt-1 mb-4">Scan QR code with your mobile camera to check-in instantly without queuing</p>
+
+                <!-- Interactive QR Target -->
+                <div onclick="goToScreen('phone')" class="group relative cursor-pointer p-4 bg-slate-50 border-2 border-dashed border-blue-400 rounded-2xl hover:border-blue-600 transition flex flex-col items-center">
+                  <div class="w-44 h-44 bg-white p-2 rounded-xl shadow-inner border border-slate-200 flex items-center justify-center relative overflow-hidden">
+                    <!-- SVG QR Code Pattern -->
+                    <svg viewBox="0 0 100 100" class="w-full h-full text-slate-900" fill="currentColor">
+                      <!-- Corners -->
+                      <rect x="5" y="5" width="28" height="28" rx="4" fill="none" stroke="currentColor" stroke-width="6"/>
+                      <rect x="12" y="12" width="14" height="14" fill="currentColor"/>
+                      <rect x="67" y="5" width="28" height="28" rx="4" fill="none" stroke="currentColor" stroke-width="6"/>
+                      <rect x="74" y="12" width="14" height="14" fill="currentColor"/>
+                      <rect x="5" y="67" width="28" height="28" rx="4" fill="none" stroke="currentColor" stroke-width="6"/>
+                      <rect x="12" y="74" width="14" height="14" fill="currentColor"/>
+                      <!-- Data dots -->
+                      <circle cx="48" cy="18" r="4"/><circle cx="58" cy="28" r="4"/><circle cx="42" cy="42" r="4"/>
+                      <circle cx="58" cy="58" r="4"/><circle cx="78" cy="48" r="4"/><circle cx="18" cy="48" r="4"/>
+                      <circle cx="82" cy="78" r="4"/><circle cx="48" cy="78" r="4"/><circle cx="70" cy="85" r="4"/>
+                      <circle cx="88" cy="62" r="3"/><circle cx="62" cy="70" r="3"/><circle cx="34" cy="85" r="4"/>
+                    </svg>
+                    <!-- Pulse overlay -->
+                    <div class="absolute inset-0 bg-blue-500/10 group-hover:bg-blue-500/20 transition flex items-center justify-center">
+                      <span class="bg-blue-600 text-white text-[11px] font-semibold px-2.5 py-1 rounded-full shadow-lg group-hover:scale-105 transition flex items-center gap-1">
+                        <i data-lucide="scan-line" class="w-3.5 h-3.5"></i> Tap to Scan QR
+                      </span>
+                    </div>
+                  </div>
+                  <span class="text-[11px] text-blue-600 font-semibold mt-2.5 flex items-center gap-1">
+                    swiftpass.nexus.io/checkin
+                  </span>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-slate-100 w-full flex items-center justify-center gap-3 text-slate-400 text-xs">
+                  <span class="flex items-center gap-1"><i data-lucide="zap" class="w-3.5 h-3.5 text-amber-500"></i> No App Required</span>
+                  <span>•</span>
+                  <span class="flex items-center gap-1"><i data-lucide="lock" class="w-3.5 h-3.5 text-emerald-500"></i> 100% Secure</span>
+                </div>
+              </div>
+            </section>
+
+            <!-- ================= SCREEN 1: MOBILE REGISTRATION ================= -->
+            <section id="screen-phone" class="screen-view hidden flex-1 flex flex-col p-5 bg-white justify-between">
+              <div>
+                <!-- Top Progress Bar -->
+                <div class="flex items-center justify-between mb-4">
+                  <button onclick="goToScreen('entrance')" class="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                  </button>
+                  <div class="flex items-center gap-1">
+                    <span class="w-6 h-1.5 rounded-full bg-blue-600"></span>
+                    <span class="w-3 h-1.5 rounded-full bg-slate-200"></span>
+                    <span class="w-3 h-1.5 rounded-full bg-slate-200"></span>
+                    <span class="w-3 h-1.5 rounded-full bg-slate-200"></span>
+                  </div>
+                  <span class="text-[11px] font-medium text-slate-400">Step 1 of 4</span>
+                </div>
+
+                <div class="mb-6">
+                  <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
+                    <i data-lucide="smartphone" class="w-5 h-5"></i>
+                  </div>
+                  <h2 class="text-xl font-bold text-slate-900">Enter your mobile number</h2>
+                  <p class="text-xs text-slate-500 mt-1">We’ll send a 4-digit verification code to keep your check-in secure and update your host.</p>
+                </div>
+
+                <!-- Input Component -->
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1.5">Mobile Phone Number</label>
+                    <div class="flex rounded-xl border border-slate-200 focus-within:border-blue-600 focus-within:ring-2 focus-within:ring-blue-100 bg-white overflow-hidden transition">
+                      <div class="bg-slate-50 px-3 py-3 border-r border-slate-200 flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                        <span>🇮🇳 +91</span>
+                        <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-slate-400"></i>
+                      </div>
+                      <input id="input-phone" type="tel" value="98765 43210" maxlength="11" placeholder="Enter 10-digit number" class="w-full px-3 py-3 text-sm text-slate-900 focus:outline-none font-medium">
+                    </div>
+                  </div>
+
+                  <div class="bg-blue-50/70 border border-blue-100 rounded-xl p-3 flex items-start gap-2.5">
+                    <i data-lucide="shield-alert" class="w-4 h-4 text-blue-600 shrink-0 mt-0.5"></i>
+                    <p class="text-[11px] text-blue-900 leading-relaxed">
+                      Your number is stored securely per ISO/IEC 27001 and only used for your visit pass and host notifications.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Fixed Bottom Button -->
+              <div class="pt-4 border-t border-slate-100">
+                <button onclick="goToScreen('otp')" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2">
+                  <span>Get Verification Code</span>
+                  <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </button>
+                <p class="text-center text-[10px] text-slate-400 mt-2">By continuing, you agree to Nexus Building Guest Policy</p>
+              </div>
+            </section>
+
+            <!-- ================= SCREEN 2: OTP VERIFICATION ================= -->
+            <section id="screen-otp" class="screen-view hidden flex-1 flex flex-col p-5 bg-white justify-between">
+              <div>
+                <!-- Top Progress Bar -->
+                <div class="flex items-center justify-between mb-4">
+                  <button onclick="goToScreen('phone')" class="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                  </button>
+                  <div class="flex items-center gap-1">
+                    <span class="w-3 h-1.5 rounded-full bg-blue-600"></span>
+                    <span class="w-6 h-1.5 rounded-full bg-blue-600"></span>
+                    <span class="w-3 h-1.5 rounded-full bg-slate-200"></span>
+                    <span class="w-3 h-1.5 rounded-full bg-slate-200"></span>
+                  </div>
+                  <span class="text-[11px] font-medium text-slate-400">Step 2 of 4</span>
+                </div>
+
+                <div class="mb-6">
+                  <div class="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-3">
+                    <i data-lucide="key-round" class="w-5 h-5"></i>
+                  </div>
+                  <h2 class="text-xl font-bold text-slate-900">Verify your mobile</h2>
+                  <p class="text-xs text-slate-500 mt-1">We sent a 4-digit OTP to <span class="font-semibold text-slate-800">+91 98765 43210</span>. <button onclick="goToScreen('phone')" class="text-blue-600 underline font-medium">Edit</button></p>
+                </div>
+
+                <!-- OTP 4-Box Inputs -->
+                <div class="flex justify-center gap-3 my-6">
+                  <input id="otp-1" type="text" maxlength="1" value="4" class="otp-box w-14 h-14 text-center text-xl font-bold rounded-xl border border-slate-200 bg-slate-50 focus:border-blue-600 focus:bg-white focus:outline-none shadow-sm transition">
+                  <input id="otp-2" type="text" maxlength="1" value="8" class="otp-box w-14 h-14 text-center text-xl font-bold rounded-xl border border-slate-200 bg-slate-50 focus:border-blue-600 focus:bg-white focus:outline-none shadow-sm transition">
+                  <input id="otp-3" type="text" maxlength="1" value="2" class="otp-box w-14 h-14 text-center text-xl font-bold rounded-xl border border-slate-200 bg-slate-50 focus:border-blue-600 focus:bg-white focus:outline-none shadow-sm transition">
+                  <input id="otp-4" type="text" maxlength="1" value="9" class="otp-box w-14 h-14 text-center text-xl font-bold rounded-xl border border-slate-200 bg-slate-50 focus:border-blue-600 focus:bg-white focus:outline-none shadow-sm transition">
+                </div>
+
+                <!-- DYNAMIC ERROR / EXPIRED STATES -->
+                <div id="otp-error-alert" class="hidden mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5">
+                  <i data-lucide="alert-circle" class="w-4 h-4 text-rose-600 shrink-0 mt-0.5"></i>
+                  <div>
+                    <h4 class="text-xs font-bold text-rose-900">Invalid verification code</h4>
+                    <p class="text-[11px] text-rose-700 mt-0.5">The OTP you entered does not match. You have 2 attempts remaining.</p>
+                  </div>
+                </div>
+
+                <div id="otp-expired-alert" class="hidden mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5">
+                  <i data-lucide="clock-alert" class="w-4 h-4 text-amber-600 shrink-0 mt-0.5"></i>
+                  <div>
+                    <h4 class="text-xs font-bold text-amber-900">Code has expired</h4>
+                    <p class="text-[11px] text-amber-700 mt-0.5">OTPs expire after 60 seconds for security. Please request a new code.</p>
+                  </div>
+                </div>
+
+                <!-- Timer & Resend -->
+                <div class="text-center text-xs text-slate-500">
+                  <span id="otp-timer-text">Resend code in <span class="font-semibold text-slate-800" id="otp-countdown">00:24</span></span>
+                  <div class="mt-2">
+                    <button id="otp-resend-btn" onclick="resendOtp()" class="text-blue-600 font-semibold hover:underline">Resend via SMS</button>
+                    <span class="mx-2 text-slate-300">•</span>
+                    <button class="text-blue-600 font-semibold hover:underline">Get code on WhatsApp</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Verify Button -->
+              <div class="pt-4 border-t border-slate-100">
+                <button onclick="verifyOtpAndProceed()" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2">
+                  <span>Verify & Continue</span>
+                  <i data-lucide="check" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </section>
+
+            <!-- ================= SCREEN 3: VISITOR DETAILS & HOST SELECTION ================= -->
+            <section id="screen-details" class="screen-view hidden flex-1 flex flex-col p-5 bg-white justify-between">
+              <div>
+                <!-- Top Progress Bar -->
+                <div class="flex items-center justify-between mb-3">
+                  <button onclick="goToScreen('otp')" class="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                  </button>
+                  <div class="flex items-center gap-1">
+                    <span class="w-3 h-1.5 rounded-full bg-blue-600"></span>
+                    <span class="w-3 h-1.5 rounded-full bg-blue-600"></span>
+                    <span class="w-6 h-1.5 rounded-full bg-blue-600"></span>
+                    <span class="w-3 h-1.5 rounded-full bg-slate-200"></span>
+                  </div>
+                  <span class="text-[11px] font-medium text-slate-400">Step 3 of 4</span>
+                </div>
+
+                <div class="mb-4">
+                  <h2 class="text-xl font-bold text-slate-900">Your Visit Details</h2>
+                  <p class="text-xs text-slate-500 mt-0.5">Please tell us who you are and who you are meeting today.</p>
+                </div>
+
+                <!-- Form Fields -->
+                <div class="space-y-3.5">
+                  <!-- Visitor Name -->
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Full Name <span class="text-rose-500">*</span></label>
+                    <div class="relative">
+                      <input id="input-name" type="text" value="Arjun Mehta" class="w-full px-3 py-2.5 pl-9 rounded-xl border border-slate-200 focus:border-blue-600 text-xs font-medium text-slate-900 focus:outline-none">
+                      <i data-lucide="user" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+                    </div>
+                  </div>
+
+                  <!-- Organization / Company -->
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Company / Organization <span class="text-slate-400 font-normal">(Optional)</span></label>
+                    <div class="relative">
+                      <input id="input-org" type="text" value="Vertex Design Studio" class="w-full px-3 py-2.5 pl-9 rounded-xl border border-slate-200 focus:border-blue-600 text-xs font-medium text-slate-900 focus:outline-none">
+                      <i data-lucide="briefcase" class="w-4 h-4 text-slate-400 absolute left-3 top-3"></i>
+                    </div>
+                  </div>
+
+                  <!-- Purpose of Visit (Select Pills) -->
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1.5">Purpose of Visit <span class="text-rose-500">*</span></label>
+                    <div class="grid grid-cols-3 gap-1.5 text-[11px]">
+                      <button type="button" onclick="selectPurpose(this, 'Business Meeting')" class="purpose-pill px-2 py-2 rounded-lg border border-blue-600 bg-blue-50 text-blue-700 font-semibold text-center transition">
+                        💼 Meeting
+                      </button>
+                      <button type="button" onclick="selectPurpose(this, 'Job Interview')" class="purpose-pill px-2 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 text-center transition">
+                        🎯 Interview
+                      </button>
+                      <button type="button" onclick="selectPurpose(this, 'Vendor / Delivery')" class="purpose-pill px-2 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 text-center transition">
+                        📦 Vendor
+                      </button>
+                      <button type="button" onclick="selectPurpose(this, 'Client Pitch')" class="purpose-pill px-2 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 text-center transition">
+                        🚀 Client Pitch
+                      </button>
+                      <button type="button" onclick="selectPurpose(this, 'Audit / Inspection')" class="purpose-pill px-2 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 text-center transition">
+                        🔍 Audit
+                      </button>
+                      <button type="button" onclick="selectPurpose(this, 'Other')" class="purpose-pill px-2 py-2 rounded-lg border border-slate-200 bg-white text-slate-700 font-medium hover:bg-slate-50 text-center transition">
+                        ✨ Other
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Host Selection with Dropdown & Search -->
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Select Host / Person to Meet <span class="text-rose-500">*</span></label>
+                    <!-- Selected Host Card -->
+                    <div class="relative">
+                      <div class="p-2.5 rounded-xl border border-blue-200 bg-blue-50/60 flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                          <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=80&h=80&fit=crop&crop=face" alt="Sarah" class="w-9 h-9 rounded-full object-cover border border-blue-300">
+                          <div>
+                            <h4 id="selected-host-name" class="text-xs font-bold text-slate-900">Sarah Jenkins</h4>
+                            <p class="text-[10px] text-slate-500">VP of Product Design • 4th Floor</p>
+                          </div>
+                        </div>
+                        <span class="text-[10px] font-semibold text-blue-600 bg-white px-2 py-1 rounded-md border border-blue-200 shadow-2xs">Change</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Continue Button -->
+              <div class="pt-3 border-t border-slate-100">
+                <button onclick="goToScreen('review')" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2">
+                  <span>Review Visit Info</span>
+                  <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </section>
+
+            <!-- ================= SCREEN 4: REVIEW & DECLARATION ================= -->
+            <section id="screen-review" class="screen-view hidden flex-1 flex flex-col p-5 bg-white justify-between">
+              <div>
+                <!-- Top Progress Bar -->
+                <div class="flex items-center justify-between mb-3">
+                  <button onclick="goToScreen('details')" class="p-1.5 -ml-1 text-slate-600 hover:text-slate-900 rounded-lg hover:bg-slate-100 transition">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                  </button>
+                  <div class="flex items-center gap-1">
+                    <span class="w-3 h-1.5 rounded-full bg-blue-600"></span>
+                    <span class="w-3 h-1.5 rounded-full bg-blue-600"></span>
+                    <span class="w-3 h-1.5 rounded-full bg-blue-600"></span>
+                    <span class="w-6 h-1.5 rounded-full bg-blue-600"></span>
+                  </div>
+                  <span class="text-[11px] font-medium text-slate-400">Step 4 of 4</span>
+                </div>
+
+                <div class="mb-4">
+                  <h2 class="text-xl font-bold text-slate-900">Confirm Your Visit</h2>
+                  <p class="text-xs text-slate-500 mt-0.5">Please review your information before we send the approval request to your host.</p>
+                </div>
+
+                <!-- Summary Card -->
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                  <div class="flex items-center justify-between pb-3 border-b border-slate-200/70">
+                    <span class="text-xs text-slate-500">Visitor</span>
+                    <div class="text-right">
+                      <p class="text-xs font-bold text-slate-900">Arjun Mehta</p>
+                      <p class="text-[10px] text-slate-500">+91 98765 43210</p>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center justify-between pb-3 border-b border-slate-200/70">
+                    <span class="text-xs text-slate-500">Organization</span>
+                    <span class="text-xs font-semibold text-slate-800">Vertex Design Studio</span>
+                  </div>
+
+                  <div class="flex items-center justify-between pb-3 border-b border-slate-200/70">
+                    <span class="text-xs text-slate-500">Meeting Host</span>
+                    <div class="text-right">
+                      <p class="text-xs font-bold text-blue-600">Sarah Jenkins</p>
+                      <p class="text-[10px] text-slate-500">Product Team • 4th Floor</p>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center justify-between pb-3 border-b border-slate-200/70">
+                    <span class="text-xs text-slate-500">Purpose</span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
+                      Business Meeting
+                    </span>
+                  </div>
+
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs text-slate-500">Location</span>
+                    <span class="text-xs font-medium text-slate-800">Nexus Tower, Entrance A</span>
+                  </div>
+                </div>
+
+                <!-- Building Safety Declaration -->
+                <div class="mt-4 p-3 bg-amber-50/60 border border-amber-200/70 rounded-xl flex items-start gap-2.5">
+                  <input id="check-safety" type="checkbox" checked class="w-4 h-4 text-blue-600 rounded mt-0.5 focus:ring-blue-500">
+                  <label for="check-safety" class="text-[11px] text-amber-900 leading-tight">
+                    I confirm that I have no active health symptoms and agree to follow Nexus Building safety and visitor protocols.
+                  </label>
+                </div>
+              </div>
+
+              <!-- Submit Request Button -->
+              <div class="pt-3 border-t border-slate-100">
+                <button onclick="submitVisitRequest()" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm shadow-lg shadow-blue-500/25 transition flex items-center justify-center gap-2">
+                  <span>Send Request to Host</span>
+                  <i data-lucide="send" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </section>
+
+            <!-- ================= SCREEN 5: PENDING APPROVAL ================= -->
+            <section id="screen-pending" class="screen-view hidden flex-1 flex flex-col p-6 bg-white justify-between text-center">
+              <div class="flex flex-col items-center pt-4">
+                
+                <!-- Status Tag -->
+                <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-xs font-bold mb-6">
+                  <span class="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                  <span>STATUS: PENDING APPROVAL</span>
+                </div>
+
+                <!-- Animated Radar Icon -->
+                <div class="relative w-32 h-32 flex items-center justify-center my-2">
+                  <div class="absolute inset-0 rounded-full bg-amber-100/50 radar-pulse"></div>
+                  <div class="absolute w-24 h-24 rounded-full bg-amber-100 flex items-center justify-center"></div>
+                  <div class="relative w-16 h-16 rounded-full bg-gradient-to-tr from-amber-500 to-amber-400 flex items-center justify-center text-white shadow-xl shadow-amber-500/30">
+                    <i data-lucide="bell-ring" class="w-8 h-8 animate-bounce"></i>
+                  </div>
+                </div>
+
+                <h2 class="text-xl font-extrabold text-slate-900 mt-4">Waiting for Sarah's Approval</h2>
+                <p class="text-xs text-slate-500 mt-2 max-w-xs leading-relaxed">
+                  We've sent a Slack alert and notification to <strong class="text-slate-800">Sarah Jenkins</strong>. Please wait a moment while they accept your visit.
+                </p>
+
+                <!-- Host Notification Simulation Banner -->
+                <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-3.5 mt-6 text-left flex items-center gap-3">
+                  <img src="https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=80&h=80&fit=crop&crop=face" alt="Sarah" class="w-10 h-10 rounded-full object-cover border border-amber-300">
+                  <div class="flex-1">
+                    <div class="flex items-center justify-between">
+                      <h4 class="text-xs font-bold text-slate-900">Sarah Jenkins</h4>
+                      <span class="text-[10px] text-amber-600 font-semibold">Alerted 10s ago</span>
+                    </div>
+                    <p class="text-[10px] text-slate-500">VP Product Design • Meeting in Room 402</p>
+                  </div>
+                </div>
+
+                <div class="mt-4 flex items-center gap-2 text-xs text-slate-400">
+                  <i data-lucide="clock" class="w-3.5 h-3.5"></i>
+                  <span>Average response time: <strong>under 2 minutes</strong></span>
+                </div>
+              </div>
+
+              <!-- Interactive Controls to simulate Host response -->
+              <div class="pt-4 border-t border-slate-100 space-y-2">
+                <div class="text-[10px] uppercase font-bold text-slate-400 mb-1">Simulate Host Action:</div>
+                <div class="grid grid-cols-2 gap-2">
+                  <button onclick="hostApprove()" class="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-emerald-600/20">
+                    <i data-lucide="check-circle" class="w-4 h-4"></i> Host Approves
+                  </button>
+                  <button onclick="hostReject()" class="py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-rose-600/20">
+                    <i data-lucide="x-circle" class="w-4 h-4"></i> Host Declines
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <!-- ================= SCREEN 6: REJECTED STATE ================= -->
+            <section id="screen-rejected" class="screen-view hidden flex-1 flex flex-col p-6 bg-white justify-between text-center">
+              <div class="flex flex-col items-center pt-6">
+                <!-- Status Badge -->
+                <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold mb-4">
+                  <span class="w-2 h-2 rounded-full bg-rose-500"></span>
+                  <span>STATUS: VISIT REQUEST DECLINED</span>
+                </div>
+
+                <div class="w-16 h-16 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mb-4">
+                  <i data-lucide="shield-x" class="w-8 h-8"></i>
+                </div>
+
+                <h2 class="text-xl font-extrabold text-slate-900">Visit Could Not Be Approved</h2>
+                <p class="text-xs text-slate-500 mt-2 max-w-xs leading-relaxed">
+                  <strong class="text-slate-800">Sarah Jenkins</strong> is currently unavailable or unable to host this visit at this time.
+                </p>
+
+                <!-- Help Desk Card -->
+                <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 mt-6 text-left">
+                  <h4 class="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <i data-lucide="help-circle" class="w-4 h-4 text-blue-600"></i> Next Steps & Assistance
+                  </h4>
+                  <ul class="text-[11px] text-slate-600 mt-2 space-y-2">
+                    <li class="flex items-start gap-2">
+                      <span class="text-blue-600 font-bold">•</span>
+                      <span>Please speak directly to the reception front desk for manual guest clearance.</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                      <span class="text-blue-600 font-bold">•</span>
+                      <span>Or reach out to your host directly via phone or email to reschedule.</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+
+              <!-- Action Buttons -->
+              <div class="pt-4 border-t border-slate-100 space-y-2">
+                <button onclick="goToScreen('details')" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold text-xs transition flex items-center justify-center gap-1.5">
+                  <i data-lucide="refresh-cw" class="w-4 h-4"></i> Edit Visit Details or Change Host
+                </button>
+                <button onclick="goToScreen('entrance')" class="w-full py-2.5 text-slate-500 hover:text-slate-700 text-xs font-semibold">
+                  Return to Home
+                </button>
+              </div>
+            </section>
+
+            <!-- ================= SCREEN 7: DIGITAL VISITOR PASS & CHECK-IN ================= -->
+            <section id="screen-pass" class="screen-view hidden flex-1 flex flex-col p-4 bg-slate-100 justify-between">
+              <div>
+                <!-- Top Header -->
+                <div class="flex items-center justify-between mb-3 px-1">
+                  <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center">
+                      <i data-lucide="check" class="w-4 h-4"></i>
+                    </div>
+                    <div>
+                      <h3 class="text-xs font-bold text-slate-900">Request Approved!</h3>
+                      <p class="text-[10px] text-emerald-600 font-semibold">Your Digital Pass is Ready</p>
+                    </div>
+                  </div>
+                  <span class="px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] border border-emerald-300">
+                    APPROVED
+                  </span>
+                </div>
+
+                <!-- Digital Ticket / Visitor Pass Card -->
+                <div class="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden relative">
+                  <!-- Pass Header Banner -->
+                  <div class="bg-gradient-to-r from-blue-700 to-indigo-800 text-white p-4">
+                    <div class="flex items-center justify-between">
+                      <span class="text-[10px] font-bold tracking-wider uppercase text-blue-200">NEXUS TOWER VISITOR PASS</span>
+                      <span class="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-mono">PASS #NX-9421</span>
+                    </div>
+                    <div class="mt-3 flex items-center gap-3">
+                      <div class="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur border border-white/30 flex items-center justify-center font-bold text-lg text-white">
+                        AM
+                      </div>
+                      <div>
+                        <h2 class="text-base font-extrabold">Arjun Mehta</h2>
+                        <p class="text-xs text-blue-200">Vertex Design Studio</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Pass Details Grid -->
+                  <div class="p-4 grid grid-cols-2 gap-3 text-xs bg-white">
+                    <div>
+                      <span class="text-[10px] text-slate-400 uppercase font-semibold block">Host</span>
+                      <span class="font-bold text-slate-800">Sarah Jenkins</span>
+                    </div>
+                    <div>
+                      <span class="text-[10px] text-slate-400 uppercase font-semibold block">Floor / Room</span>
+                      <span class="font-bold text-slate-800">4th Floor • Room 402</span>
+                    </div>
+                    <div>
+                      <span class="text-[10px] text-slate-400 uppercase font-semibold block">Date</span>
+                      <span class="font-bold text-slate-800">Today, 24 Oct</span>
+                    </div>
+                    <div>
+                      <span class="text-[10px] text-slate-400 uppercase font-semibold block">Valid Until</span>
+                      <span class="font-bold text-rose-600">06:00 PM</span>
+                    </div>
+                  </div>
+
+                  <!-- Ticket Perforation Notches -->
+                  <div class="relative py-2 bg-slate-50 border-y border-dashed border-slate-200">
+                    <div class="pass-notch-left"></div>
+                    <div class="pass-notch-right"></div>
+                    <div class="text-center text-[10px] text-slate-400 font-mono tracking-widest">
+                      • • • SCAN AT TURNSTILE / RECEPTION • • •
+                    </div>
+                  </div>
+
+                  <!-- Dynamic Rotating QR Code for Turnstile Scan -->
+                  <div class="p-4 flex flex-col items-center bg-white">
+                    <div class="w-36 h-36 bg-slate-50 p-2 rounded-2xl border-2 border-slate-900 flex items-center justify-center relative">
+                      <svg viewBox="0 0 100 100" class="w-full h-full text-slate-900" fill="currentColor">
+                        <!-- Corners -->
+                        <rect x="5" y="5" width="28" height="28" rx="4" fill="none" stroke="currentColor" stroke-width="6"/>
+                        <rect x="12" y="12" width="14" height="14" fill="currentColor"/>
+                        <rect x="67" y="5" width="28" height="28" rx="4" fill="none" stroke="currentColor" stroke-width="6"/>
+                        <rect x="74" y="12" width="14" height="14" fill="currentColor"/>
+                        <rect x="5" y="67" width="28" height="28" rx="4" fill="none" stroke="currentColor" stroke-width="6"/>
+                        <rect x="12" y="74" width="14" height="14" fill="currentColor"/>
+                        <!-- Center Token Pattern -->
+                        <rect x="42" y="42" width="16" height="16" fill="#2563eb" rx="2"/>
+                        <circle cx="48" cy="18" r="4"/><circle cx="58" cy="28" r="4"/><circle cx="78" cy="48" r="4"/>
+                        <circle cx="18" cy="48" r="4"/><circle cx="82" cy="78" r="4"/><circle cx="48" cy="78" r="4"/>
+                      </svg>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mt-2 font-mono flex items-center gap-1">
+                      <i data-lucide="shield-check" class="w-3.5 h-3.5 text-emerald-500"></i> Dynamic Token Refresh: 28s
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Check-In Action Button -->
+              <div class="pt-3">
+                <button onclick="confirmCheckIn()" class="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/30 transition flex items-center justify-center gap-2">
+                  <i data-lucide="log-in" class="w-4 h-4"></i>
+                  <span>Complete Check-in</span>
+                </button>
+                <p class="text-center text-[10px] text-slate-500 mt-1.5">Tap when entering building turnstile or security gate</p>
+              </div>
+            </section>
+
+            <!-- ================= SCREEN 8: CHECKED-IN ACTIVE STATUS ================= -->
+            <section id="screen-checkedin" class="screen-view hidden flex-1 flex flex-col p-4 bg-slate-50 justify-between">
+              <div>
+                <!-- Active Status Banner (Always Visible) -->
+                <div class="bg-gradient-to-r from-emerald-600 to-teal-700 text-white rounded-2xl p-4 shadow-lg mb-4">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                      <span class="w-3 h-3 rounded-full bg-emerald-300 animate-ping"></span>
+                      <span class="text-xs font-extrabold uppercase tracking-wider">CHECKED IN • ACTIVE</span>
+                    </div>
+                    <span class="text-[11px] font-mono bg-white/20 px-2 py-0.5 rounded-full">Pass Active</span>
+                  </div>
+
+                  <div class="mt-3 flex items-end justify-between">
+                    <div>
+                      <p class="text-xs text-emerald-100">Check-in Time</p>
+                      <h3 class="text-xl font-black">10:42 AM</h3>
+                    </div>
+                    <div class="text-right">
+                      <p class="text-xs text-emerald-100">Elapsed Time</p>
+                      <h4 id="visit-timer" class="text-base font-bold font-mono">00:18:42</h4>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Visitor & Host Information Card -->
+                <div class="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm space-y-3 mb-3">
+                  <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-xs flex items-center justify-center">
+                        AM
+                      </div>
+                      <div>
+                        <h4 class="text-xs font-bold text-slate-900">Arjun Mehta</h4>
+                        <p class="text-[10px] text-slate-500">Vertex Design Studio</p>
+                      </div>
+                    </div>
+                    <span class="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">Badge #NX-9421</span>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                      <span class="text-[10px] text-slate-400 font-medium block">Host</span>
+                      <span class="font-bold text-slate-800">Sarah Jenkins</span>
+                    </div>
+                    <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100">
+                      <span class="text-[10px] text-slate-400 font-medium block">Purpose</span>
+                      <span class="font-bold text-slate-800">Business Meeting</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- In-Premises Perks & Amenities -->
+                <div class="space-y-2 mb-2">
+                  <!-- Guest Wi-Fi Card -->
+                  <div class="bg-white rounded-xl p-3 border border-slate-200 flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                        <i data-lucide="wifi" class="w-4 h-4"></i>
+                      </div>
+                      <div>
+                        <h5 class="text-xs font-bold text-slate-900">Guest Wi-Fi</h5>
+                        <p class="text-[10px] text-slate-500 font-mono">SSID: Nexus-Guest | Pass: Welcome2026</p>
+                      </div>
+                    </div>
+                    <button class="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-md">Copy</button>
+                  </div>
+
+                  <!-- Emergency Assistance -->
+                  <div class="bg-white rounded-xl p-3 border border-slate-200 flex items-center justify-between">
+                    <div class="flex items-center gap-2.5">
+                      <div class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                        <i data-lucide="phone-call" class="w-4 h-4"></i>
+                      </div>
+                      <div>
+                        <h5 class="text-xs font-bold text-slate-900">Reception Desk</h5>
+                        <p class="text-[10px] text-slate-500">Need help or directions? Ext: 4001</p>
+                      </div>
+                    </div>
+                    <a href="tel:4001" class="text-[10px] font-semibold text-slate-700 bg-slate-100 px-2 py-1 rounded-md">Call</a>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Primary Check-Out Action -->
+              <div class="pt-2">
+                <button onclick="openCheckoutModal()" class="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold text-sm shadow-lg transition flex items-center justify-center gap-2">
+                  <i data-lucide="log-out" class="w-4 h-4 text-rose-400"></i>
+                  <span>Check Out of Building</span>
+                </button>
+                <p class="text-center text-[10px] text-slate-500 mt-1">Tap when you are ready to conclude your visit and exit</p>
+              </div>
+            </section>
+
+            <!-- ================= SCREEN 9: CHECKED OUT COMPLETION ================= -->
+            <section id="screen-checkedout" class="screen-view hidden flex-1 flex flex-col p-6 bg-white justify-between text-center">
+              <div class="flex flex-col items-center pt-4">
+                
+                <!-- Status Tag -->
+                <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold mb-4">
+                  <i data-lucide="check-check" class="w-3.5 h-3.5 text-slate-600"></i>
+                  <span>STATUS: CHECKED OUT</span>
+                </div>
+
+                <div class="w-16 h-16 rounded-full bg-slate-100 text-slate-800 flex items-center justify-center mb-3">
+                  <i data-lucide="building" class="w-8 h-8"></i>
+                </div>
+
+                <h2 class="text-xl font-extrabold text-slate-900">Thank you for visiting!</h2>
+                <p class="text-xs text-slate-500 mt-1">Your visit has officially been completed and your access pass is now deactivated.</p>
+
+                <!-- Visit Summary Card -->
+                <div class="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 mt-5 text-left space-y-2.5">
+                  <div class="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                    <span class="text-xs text-slate-500">Visitor</span>
+                    <span class="text-xs font-bold text-slate-900">Arjun Mehta</span>
+                  </div>
+                  <div class="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                    <span class="text-xs text-slate-500">Host Met</span>
+                    <span class="text-xs font-bold text-slate-900">Sarah Jenkins</span>
+                  </div>
+                  <div class="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                    <span class="text-xs text-slate-500">Check-in Time</span>
+                    <span class="text-xs font-medium text-slate-800">10:42 AM</span>
+                  </div>
+                  <div class="flex items-center justify-between pb-2 border-b border-slate-200/60">
+                    <span class="text-xs text-slate-500">Check-out Time</span>
+                    <span class="text-xs font-bold text-blue-600">12:15 PM</span>
+                  </div>
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs text-slate-500">Total Duration</span>
+                    <span class="text-xs font-extrabold text-emerald-600">1 hr 33 mins</span>
+                  </div>
+                </div>
+
+                <!-- Rating / Experience Feedback -->
+                <div class="w-full mt-4 p-3 bg-blue-50/50 border border-blue-100 rounded-xl">
+                  <p class="text-[11px] font-semibold text-slate-700">How was your check-in experience?</p>
+                  <div class="flex justify-center gap-3 mt-2 text-amber-400">
+                    <button class="hover:scale-125 transition text-base">⭐</button>
+                    <button class="hover:scale-125 transition text-base">⭐</button>
+                    <button class="hover:scale-125 transition text-base">⭐</button>
+                    <button class="hover:scale-125 transition text-base">⭐</button>
+                    <button class="hover:scale-125 transition text-base">⭐</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Finish Button -->
+              <div class="pt-3 border-t border-slate-100">
+                <button onclick="goToScreen('entrance')" class="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-semibold text-xs transition">
+                  Close & Done
+                </button>
+              </div>
+            </section>
+
+            <!-- ================= MODAL: CHECK-OUT CONFIRMATION ================= -->
+            <div id="modal-checkout" class="hidden absolute inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-end">
+              <div class="w-full bg-white rounded-t-3xl p-6 shadow-2xl animate-in slide-in-from-bottom duration-300">
+                <div class="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-4"></div>
+                
+                <div class="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center mx-auto mb-3">
+                  <i data-lucide="log-out" class="w-6 h-6"></i>
+                </div>
+
+                <h3 class="text-lg font-bold text-center text-slate-900">Confirm Check-out</h3>
+                <p class="text-xs text-center text-slate-500 mt-1 max-w-xs mx-auto">
+                  Are you ready to leave Nexus Tower? This will conclude your visit and inform your host Sarah Jenkins.
+                </p>
+
+                <div class="mt-6 space-y-2">
+                  <button onclick="confirmCheckOut()" class="w-full py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs shadow-lg shadow-rose-600/25 transition">
+                    Yes, Check Out Now
+                  </button>
+                  <button onclick="closeCheckoutModal()" class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-semibold text-xs transition">
+                    Cancel & Stay Checked In
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- iOS Home Indicator bar -->
+          <div class="h-6 w-full bg-white flex items-center justify-center select-none shrink-0">
+            <div class="w-32 h-1 bg-slate-300 rounded-full"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Right Column: Live Context & Design Decisions for Current Screen -->
+      <div class="w-full lg:w-80 bg-slate-950/70 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 order-3">
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-wider text-blue-400">Current Screen Rationale</span>
+          <h3 id="panel-title" class="text-sm font-bold text-white mt-0.5">1. Entrance QR Poster</h3>
+        </div>
+
+        <div id="panel-desc" class="text-xs text-slate-300 leading-relaxed space-y-2">
+          <p>
+            <strong>UX Goal:</strong> Zero-friction entry point at reception. No app download or account creation required.
+          </p>
+          <p>
+            <strong>Visual Hierarchy:</strong> High-contrast QR code with building branding. Provides instant reassurance that visitors are scanning an official reception portal.
+          </p>
+          <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+            <strong class="text-slate-200 block mb-1">Key UX Decisions:</strong>
+            • Browser-based Progressive Web App<br>
+            • Clear physical sign context ("Nexus Tower Reception")<br>
+            • Tap target fallback for touchscreen kiosks
+          </div>
+        </div>
+
+        <div class="border-t border-slate-800 pt-3">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1.5">Figma Reusable Component</span>
+          <div id="panel-component" class="text-[11px] font-mono bg-slate-900 p-2 rounded-lg text-blue-300 border border-slate-800">
+            Poster / QR-Physical-Signage-Card
+          </div>
+        </div>
+      </div>
+
+    <!-- VIEW: HIGH-FIDELITY FIGMA MOCKUP SHOWCASE -->
+    <div id="view-mockup" class="hidden max-w-7xl mx-auto w-full py-4 space-y-6">
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-6">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 class="text-xl font-bold text-white">High-Fidelity Visual Design Mockup</h2>
+              <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Figma Board Ready</span>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">Dribbble-ready presentation board showcasing the key stages: Verification, Digital Pass, and In-Premises Dashboard.</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <a href="vms_ui_mockup.jpg" download="vms_figma_mockup.jpg" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition shadow-md shadow-blue-500/25">
+              <i data-lucide="download" class="w-3.5 h-3.5"></i> Download Hi-Res Mockup
+            </a>
+          </div>
+        </div>
+
+        <!-- Image Container -->
+        <div class="rounded-2xl overflow-hidden border border-slate-800 shadow-2xl bg-slate-900 relative group">
+          <img src="vms_ui_mockup.jpg" alt="VMS High-Fidelity UI Mockup" class="w-full h-auto object-cover rounded-xl transition duration-300">
+        </div>
+
+        <!-- Annotation Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+          <div class="p-4 bg-slate-900 rounded-xl border border-slate-800">
+            <div class="flex items-center gap-2 mb-1.5 text-blue-400 text-xs font-bold">
+              <span class="w-5 h-5 rounded-full bg-blue-500/20 flex items-center justify-center text-[10px]">1</span>
+              <span>OTP Phone Verification</span>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-relaxed">
+              Auto-advancing 4-pin security entry, numeric keypad trigger, resend countdown, and instant inline feedback.
+            </p>
+          </div>
+
+          <div class="p-4 bg-slate-900 rounded-xl border border-slate-800">
+            <div class="flex items-center gap-2 mb-1.5 text-emerald-400 text-xs font-bold">
+              <span class="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center text-[10px]">2</span>
+              <span>Digital Visitor Pass</span>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-relaxed">
+              High-contrast Apple Wallet inspired card, host badge info (Sarah Jenkins), dynamic rotating turnstile QR code.
+            </p>
+          </div>
+
+          <div class="p-4 bg-slate-900 rounded-xl border border-slate-800">
+            <div class="flex items-center gap-2 mb-1.5 text-cyan-400 text-xs font-bold">
+              <span class="w-5 h-5 rounded-full bg-cyan-500/20 flex items-center justify-center text-[10px]">3</span>
+              <span>Active In-Premises Dashboard</span>
+            </div>
+            <p class="text-[11px] text-slate-400 leading-relaxed">
+              Real-time visit status banner, check-in timestamp, guest Wi-Fi access, and one-tap checkout mechanism.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 2: ALL SCREENS GRID (DESIGN SYSTEM & UI SHOWCASE) -->
+    <div id="view-grid" class="hidden max-w-7xl mx-auto w-full py-4">
+      <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 class="text-xl font-bold text-white">Full Screen Matrix & Architecture (9 High-Fidelity Views)</h2>
+          <p class="text-xs text-slate-400">Standard 390x844px Mobile Viewports with complete error & state variations.</p>
+        </div>
+        <div class="text-xs text-slate-400 flex items-center gap-3">
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-blue-500"></span> Primary Flow</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Pending / Alert</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Active Pass</span>
+          <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Declined</span>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        
+        <!-- Card 1 -->
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
+            <span>01. Scan QR Entrance</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Trigger</span>
+          </div>
+          <div class="bg-slate-900 rounded-xl p-3 border border-slate-800 text-xs text-slate-400 space-y-1.5">
+            <p><strong>Screen:</strong> Entrance Physical Sign / Splash</p>
+            <p><strong>Elements:</strong> Building Logo, Dynamic QR, No-app note</p>
+            <p><strong>Tap Target:</strong> Camera QR Scan or Link</p>
+          </div>
+        </div>
+
+        <!-- Card 2 -->
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
+            <span>02. Phone Registration</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Input</span>
+          </div>
+          <div class="bg-slate-900 rounded-xl p-3 border border-slate-800 text-xs text-slate-400 space-y-1.5">
+            <p><strong>Screen:</strong> Mobile Input & Privacy Disclaimer</p>
+            <p><strong>Elements:</strong> +91 Country dropdown, auto-formatted tel input</p>
+            <p><strong>States:</strong> Default, Focus, Invalid phone format</p>
+          </div>
+        </div>
+
+        <!-- Card 3 -->
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
+            <span>03. OTP Verification</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">Security</span>
+          </div>
+          <div class="bg-slate-900 rounded-xl p-3 border border-slate-800 text-xs text-slate-400 space-y-1.5">
+            <p><strong>Screen:</strong> 4-Box PIN Input with countdown timer</p>
+            <p><strong>Elements:</strong> Auto-advance digit boxes, Resend SMS / WhatsApp</p>
+            <p><strong>Edge Cases:</strong> OTP Error banner, OTP Expired banner</p>
+          </div>
+        </div>
+
+        <!-- Card 4 -->
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
+            <span>04. Details & Host Picker</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Context</span>
+          </div>
+          <div class="bg-slate-900 rounded-xl p-3 border border-slate-800 text-xs text-slate-400 space-y-1.5">
+            <p><strong>Screen:</strong> Visitor Name, Org, Purpose Pills, Host Card</p>
+            <p><strong>Elements:</strong> Searchable host directory with avatar & dept</p>
+            <p><strong>Friction Reducer:</strong> Purpose quick-select chips</p>
+          </div>
+        </div>
+
+        <!-- Card 5 -->
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
+            <span>05. Review & Declaration</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Confirm</span>
+          </div>
+          <div class="bg-slate-900 rounded-xl p-3 border border-slate-800 text-xs text-slate-400 space-y-1.5">
+            <p><strong>Screen:</strong> High-density Summary Card</p>
+            <p><strong>Elements:</strong> Visitor, Host, Floor, Purpose, NDA/Safety Check</p>
+            <p><strong>Action:</strong> Primary CTA "Send Request to Host"</p>
+          </div>
+        </div>
+
+        <!-- Card 6 -->
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
+            <span>06. Pending Approval</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-400">Status</span>
+          </div>
+          <div class="bg-slate-900 rounded-xl p-3 border border-slate-800 text-xs text-slate-400 space-y-1.5">
+            <p><strong>Screen:</strong> Waiting Radar Animation & Host Ping</p>
+            <p><strong>Elements:</strong> Radar pulse, Slack ping confirmation, SLA (~2m)</p>
+            <p><strong>Outcomes:</strong> Host Approved vs Host Rejected</p>
+          </div>
+        </div>
+
+        <!-- Card 7 -->
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
+            <span>07. Digital Visitor Pass</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">Credential</span>
+          </div>
+          <div class="bg-slate-900 rounded-xl p-3 border border-slate-800 text-xs text-slate-400 space-y-1.5">
+            <p><strong>Screen:</strong> Apple Wallet-style Ticket with Perforations</p>
+            <p><strong>Elements:</strong> Badge #, Dynamic QR, Expiry timestamp</p>
+            <p><strong>Action:</strong> "Complete Check-in" Gate Trigger</p>
+          </div>
+        </div>
+
+        <!-- Card 8 -->
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
+            <span>08. Active Checked-In</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400">In-Office</span>
+          </div>
+          <div class="bg-slate-900 rounded-xl p-3 border border-slate-800 text-xs text-slate-400 space-y-1.5">
+            <p><strong>Screen:</strong> In-Premises Dashboard</p>
+            <p><strong>Elements:</strong> Live duration clock, Guest Wi-Fi copy, Help Desk</p>
+            <p><strong>Action:</strong> Prominent "Check Out of Building" CTA</p>
+          </div>
+        </div>
+
+        <!-- Card 9 -->
+        <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 flex flex-col">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-300 mb-2">
+            <span>09. Checked Out Summary</span>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-slate-500/20 text-slate-400">Completion</span>
+          </div>
+          <div class="bg-slate-900 rounded-xl p-3 border border-slate-800 text-xs text-slate-400 space-y-1.5">
+            <p><strong>Screen:</strong> Visit Receipt & Satisfaction Rating</p>
+            <p><strong>Elements:</strong> Check-out time (12:15 PM), duration (1h 33m), Star rating</p>
+            <p><strong>State:</strong> Pass revoked, host notified of exit</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- VIEW 3: USER FLOW & INFORMATION ARCHITECTURE -->
+    <div id="view-flow" class="hidden max-w-7xl mx-auto w-full py-4 space-y-6">
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-6">
+        <h2 class="text-xl font-bold text-white mb-2">Complete Visitor Journey & Decision Flow</h2>
+        <p class="text-xs text-slate-400 mb-6">End-to-end UX architecture covering Happy Path, Rejection paths, and Security verification loops.</p>
+
+        <!-- Visual Flow Diagram -->
+        <div class="space-y-4">
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="px-3 py-2 bg-blue-900/60 border border-blue-700 text-blue-200 rounded-xl font-semibold flex items-center gap-1.5">
+              <i data-lucide="qr-code" class="w-4 h-4"></i> 1. Entrance QR Scan
+            </span>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500"></i>
+            <span class="px-3 py-2 bg-slate-900 border border-slate-700 text-slate-200 rounded-xl font-semibold flex items-center gap-1.5">
+              <i data-lucide="phone" class="w-4 h-4"></i> 2. Phone Input
+            </span>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500"></i>
+            <span class="px-3 py-2 bg-slate-900 border border-slate-700 text-slate-200 rounded-xl font-semibold flex items-center gap-1.5">
+              <i data-lucide="key" class="w-4 h-4"></i> 3. OTP Verification
+            </span>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500"></i>
+            <span class="px-3 py-2 bg-slate-900 border border-slate-700 text-slate-200 rounded-xl font-semibold flex items-center gap-1.5">
+              <i data-lucide="user-plus" class="w-4 h-4"></i> 4. Visit Details & Host
+            </span>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500"></i>
+            <span class="px-3 py-2 bg-slate-900 border border-slate-700 text-slate-200 rounded-xl font-semibold flex items-center gap-1.5">
+              <i data-lucide="clipboard-check" class="w-4 h-4"></i> 5. Review & Submit
+            </span>
+          </div>
+
+          <div class="flex items-center gap-2 text-xs pl-8">
+            <i data-lucide="corner-down-right" class="w-4 h-4 text-slate-500"></i>
+            <span class="text-xs text-slate-400 font-mono">Triggers Webhook notification to Host via Slack / SMS</span>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2 text-xs pl-12">
+            <span class="px-3 py-2 bg-amber-950/70 border border-amber-800 text-amber-300 rounded-xl font-semibold flex items-center gap-1.5">
+              <i data-lucide="clock" class="w-4 h-4"></i> Status: Pending
+            </span>
+            <i data-lucide="arrow-right" class="w-4 h-4 text-slate-500"></i>
+            
+            <!-- Decision Split -->
+            <div class="flex flex-col gap-2">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] uppercase font-bold text-emerald-400 bg-emerald-950/80 px-2 py-0.5 rounded border border-emerald-800">Approved</span>
+                <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-emerald-500"></i>
+                <span class="px-3 py-1.5 bg-emerald-950/80 border border-emerald-700 text-emerald-200 rounded-xl font-semibold flex items-center gap-1.5">
+                  <i data-lucide="ticket" class="w-4 h-4"></i> 6. Visitor Pass Issued
+                </span>
+                <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-slate-500"></i>
+                <span class="px-3 py-1.5 bg-blue-950/80 border border-blue-700 text-blue-200 rounded-xl font-semibold flex items-center gap-1.5">
+                  <i data-lucide="check-circle-2" class="w-4 h-4"></i> 7. Status: Checked In
+                </span>
+                <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-slate-500"></i>
+                <span class="px-3 py-1.5 bg-slate-900 border border-slate-700 text-slate-200 rounded-xl font-semibold flex items-center gap-1.5">
+                  <i data-lucide="log-out" class="w-4 h-4"></i> 8. Status: Checked Out
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] uppercase font-bold text-rose-400 bg-rose-950/80 px-2 py-0.5 rounded border border-rose-800">Rejected</span>
+                <i data-lucide="arrow-right" class="w-3.5 h-3.5 text-rose-500"></i>
+                <span class="px-3 py-1.5 bg-rose-950/80 border border-rose-700 text-rose-200 rounded-xl font-semibold flex items-center gap-1.5">
+                  <i data-lucide="x-circle" class="w-4 h-4"></i> Decision: Rejected (Reception Fallback & Host Call)
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Information Architecture breakdown -->
+        <div class="mt-8 border-t border-slate-800 pt-6">
+          <h3 class="text-sm font-bold text-white mb-3 flex items-center gap-2">
+            <i data-lucide="layers" class="w-4 h-4 text-blue-400"></i> Information Architecture (IA) Hierarchy
+          </h3>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+              <h4 class="font-bold text-blue-400 mb-2">1. Identity & Auth Layer</h4>
+              <ul class="text-slate-400 space-y-1.5 list-disc pl-4">
+                <li>Entrance QR context (Location ID)</li>
+                <li>E.164 Phone validation</li>
+                <li>4-digit TOTP with SMS/WhatsApp fallback</li>
+                <li>Rate-limiting & attempt throttling</li>
+              </ul>
+            </div>
+            <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+              <h4 class="font-bold text-amber-400 mb-2">2. Visit Context & Approval</h4>
+              <ul class="text-slate-400 space-y-1.5 list-disc pl-4">
+                <li>Visitor full name & company metadata</li>
+                <li>Purpose classification pills</li>
+                <li>Host directory search & floor assignment</li>
+                <li>Async Host Approval notification loop</li>
+              </ul>
+            </div>
+            <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+              <h4 class="font-bold text-emerald-400 mb-2">3. Credential & Lifecycle</h4>
+              <ul class="text-slate-400 space-y-1.5 list-disc pl-4">
+                <li>Time-limited dynamic QR pass (Turnstile scan)</li>
+                <li>Active status monitoring & visit duration clock</li>
+                <li>In-building perks (Guest Wi-Fi credentials)</li>
+                <li>Graceful 1-tap check-out & visit log receipt</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW 4: FIGMA SPECS & CASE STUDY RATIONALE -->
+    <div id="view-figma" class="hidden max-w-7xl mx-auto w-full py-4 space-y-6">
+      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-xl font-bold text-white">Figma Submission Blueprint & Design Rationale</h2>
+            <p class="text-xs text-slate-400">Everything needed to ace the 3–4 Hour Figma assignment evaluation.</p>
+          </div>
+          <button onclick="copyCaseStudyText()" class="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-semibold flex items-center gap-1.5 transition">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i> Copy Case Study Text
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 text-xs text-slate-300">
+          
+          <!-- Design System Tokens -->
+          <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-3">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <i data-lucide="palette" class="w-4 h-4 text-blue-400"></i> Design Tokens & Variables
+            </h3>
+            <div class="space-y-2">
+              <div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800">
+                <span class="font-medium">Primary Brand</span>
+                <span class="font-mono text-blue-400">#2563EB (Indigo Blue)</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800">
+                <span class="font-medium">Pending State</span>
+                <span class="font-mono text-amber-400">#F59E0B (Amber Gold)</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800">
+                <span class="font-medium">Approved / Active</span>
+                <span class="font-mono text-emerald-400">#10B981 (Emerald Green)</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800">
+                <span class="font-medium">Declined / Error</span>
+                <span class="font-mono text-rose-400">#EF4444 (Rose Red)</span>
+              </div>
+              <div class="flex items-center justify-between p-2 rounded-lg bg-slate-950 border border-slate-800">
+                <span class="font-medium">Checked Out</span>
+                <span class="font-mono text-slate-400">#64748B (Slate Neutral)</span>
+              </div>
+            </div>
+
+            <div class="pt-2">
+              <strong class="text-white block mb-1">Typography Scale (Mobile 390px):</strong>
+              <p class="text-slate-400 text-[11px] leading-relaxed">
+                Font: <strong>Inter / SF Pro Display</strong><br>
+                • Title 1: 22px / SemiBold (Screen Titles)<br>
+                • Headline: 16px / Bold (Card headers, pass names)<br>
+                • Body: 13px / Regular (Form labels, instructions)<br>
+                • Micro: 11px / Medium (Tags, status badges, timestamps)
+              </p>
+            </div>
+          </div>
+
+          <!-- Figma Canvas Structure -->
+          <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-3">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <i data-lucide="folder-tree" class="w-4 h-4 text-emerald-400"></i> Recommended Figma Page Setup
+            </h3>
+            <ul class="space-y-2 text-slate-300">
+              <li class="p-2 bg-slate-950 rounded-lg border border-slate-800">
+                <strong>Page 1: 📱 Final Prototype Flow</strong> — 9 main screens connected with Smart Animate and On Tap interactions.
+              </li>
+              <li class="p-2 bg-slate-950 rounded-lg border border-slate-800">
+                <strong>Page 2: ⚡ UX States & Edge Cases</strong> — OTP Error, OTP Expired, Host Rejected, Checkout Modal.
+              </li>
+              <li class="p-2 bg-slate-950 rounded-lg border border-slate-800">
+                <strong>Page 3: 🧩 Design System & Components</strong> — Buttons, Inputs, Status Badges, Digital Pass variant.
+              </li>
+              <li class="p-2 bg-slate-950 rounded-lg border border-slate-800">
+                <strong>Page 4: 🗺️ User Flow & Architecture</strong> — Step-by-step diagram showing the visitor journey.
+              </li>
+              <li class="p-2 bg-slate-950 rounded-lg border border-slate-800">
+                <strong>Page 5: 📝 Case Study & Approach</strong> — Short writeup explaining design decisions.
+              </li>
+            </ul>
+          </div>
+
+          <!-- Key UX Decisions & Rationale -->
+          <div class="lg:col-span-2 bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-3">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <i data-lucide="lightbulb" class="w-4 h-4 text-amber-400"></i> Key UX Decisions That Make Check-in & Check-out Frictionless
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-slate-300">
+              <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+                <h4 class="font-bold text-white mb-1">1. Zero Download Barrier</h4>
+                <p class="text-slate-400 text-[11px] leading-relaxed">
+                  Scanning the QR opens a responsive mobile web interface immediately. No App Store or Google Play download hurdle that causes 60%+ visitor drop-off.
+                </p>
+              </div>
+              <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+                <h4 class="font-bold text-white mb-1">2. Single-Glance Digital Pass</h4>
+                <p class="text-slate-400 text-[11px] leading-relaxed">
+                  Instead of a printed sticker or thermal receipt that gets lost, visitors get an Apple Wallet-inspired digital pass with dynamic QR code and clear host details.
+                </p>
+              </div>
+              <div class="p-3 bg-slate-950 rounded-lg border border-slate-800">
+                <h4 class="font-bold text-white mb-1">3. Autonomous 1-Tap Check-out</h4>
+                <p class="text-slate-400 text-[11px] leading-relaxed">
+                  Traditional visitors leave without notifying reception. With SwiftPass, the active status screen has a persistent "Check Out" button that revokes the badge and logs exit time instantly.
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Notification Toast -->
+  <div id="toast" class="fixed bottom-6 right-6 bg-slate-900 text-white text-xs font-semibold px-4 py-2.5 rounded-xl border border-slate-700 shadow-2xl transition transform translate-y-20 opacity-0 pointer-events-none z-50 flex items-center gap-2">
+    <i data-lucide="check" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toast-text">Action completed</span>
+  </div>
+
+  <script>
+    // State Variables
+    let currentScreen = 'entrance';
+    let visitSeconds = 18 * 60 + 42; // Simulated active visit elapsed time
+    let timerInterval = null;
+
+    // Screen Titles and Metadata for Right-Hand Rationale Panel
+    const screenData = {
+      entrance: {
+        title: '1. Entrance QR Poster',
+        desc: `<p><strong>UX Goal:</strong> Zero-friction entry point at reception. No app download or account creation required.</p>
+               <p><strong>Visual Hierarchy:</strong> High-contrast QR code with building branding. Provides instant reassurance that visitors are scanning an official reception portal.</p>
+               <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                 <strong class="text-slate-200 block mb-1">Key UX Decisions:</strong>
+                 • Browser-based Progressive Web App<br>
+                 • Clear physical sign context ("Nexus Tower Reception")<br>
+                 • Tap target fallback for touchscreen kiosks
+               </div>`,
+        component: 'Poster / QR-Physical-Signage-Card'
+      },
+      phone: {
+        title: '2. Phone Registration',
+        desc: `<p><strong>UX Goal:</strong> Minimalist mobile entry with country code auto-detection.</p>
+               <p><strong>Privacy Assurance:</strong> Prominently highlights compliance with visitor data privacy to build trust.</p>
+               <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                 <strong class="text-slate-200 block mb-1">Key UX Decisions:</strong>
+                 • Numeric keypad trigger (type="tel")<br>
+                 • Privacy micro-copy placed next to input<br>
+                 • Clean 4-step progress indicator
+               </div>`,
+        component: 'Input / Mobile-Field-With-Country-Prefix'
+      },
+      otp: {
+        title: '3. OTP Verification',
+        desc: `<p><strong>UX Goal:</strong> Rapid authentication preventing falsified guest registration.</p>
+               <p><strong>States Covered:</strong> Default input, OTP Error state, and OTP Expired state with 30s countdown.</p>
+               <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                 <strong class="text-slate-200 block mb-1">Key UX Decisions:</strong>
+                 • 4-Box PIN auto-focus & paste handling<br>
+                 • Multi-channel fallback (SMS & WhatsApp)<br>
+                 • Inline error messaging with remaining attempts
+               </div>`,
+        component: 'Input / OTP-4-Digit-Group + Alert-Banner'
+      },
+      details: {
+        title: '4. Visitor Details & Host Selection',
+        desc: `<p><strong>UX Goal:</strong> Capture essential visit context in under 20 seconds.</p>
+               <p><strong>Friction Reduction:</strong> 1-tap Purpose Chips instead of clunky dropdowns. Searchable Host card showing floor and department.</p>
+               <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                 <strong class="text-slate-200 block mb-1">Key UX Decisions:</strong>
+                 • Pill selector for top 5 visit reasons<br>
+                 • Host verification card with photo & room number<br>
+                 • Auto-fill support for returning visitors
+               </div>`,
+        component: 'Form / Purpose-Chips + Host-Selection-Card'
+      },
+      review: {
+        title: '5. Review & Declaration',
+        desc: `<p><strong>UX Goal:</strong> Pre-submission confirmation to eliminate typos and mistaken hosts.</p>
+               <p><strong>Compliance:</strong> Integrated safety declaration & NDA checkbox before host dispatch.</p>
+               <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                 <strong class="text-slate-200 block mb-1">Key UX Decisions:</strong>
+                 • High-contrast summary invoice/card layout<br>
+                 • Explicit consent checkbox for building safety<br>
+                 • Primary CTA triggers Slack/SMS webhook to host
+               </div>`,
+        component: 'Card / Visit-Summary-Receipt + Checkbox'
+      },
+      pending: {
+        title: '6. Approval Pending',
+        desc: `<p><strong>UX Goal:</strong> Manage visitor waiting anxiety with transparent feedback.</p>
+               <p><strong>Dynamic Visuals:</strong> Radar pulse animation and explicit average wait time SLA (under 2 minutes).</p>
+               <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                 <strong class="text-slate-200 block mb-1">Key UX Decisions:</strong>
+                 • Live ping simulation showing host alerted<br>
+                 • Reduces reception desk inquiries while waiting<br>
+                 • Includes simulation triggers for Approved vs Declined
+               </div>`,
+        component: 'Feedback / Pulsing-Radar-Status-View'
+      },
+      rejected: {
+        title: '6b. Visit Request Declined',
+        desc: `<p><strong>UX Goal:</strong> Communicate rejection empathetically with clear resolution pathways.</p>
+               <p><strong>Graceful Handling:</strong> Front desk reception assistance fallback and option to edit visit details or call host.</p>
+               <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                 <strong class="text-slate-200 block mb-1">Key UX Decisions:</strong>
+                 • Softened crimson status badge<br>
+                 • Explicit resolution next steps<br>
+                 • Prevents dead-end visitor experience
+               </div>`,
+        component: 'Feedback / Declined-State-Card'
+      },
+      pass: {
+        title: '7. Digital Visitor Pass (Approved)',
+        desc: `<p><strong>UX Goal:</strong> Deliver a prestigious, secure digital credential.</p>
+               <p><strong>Design System:</strong> Apple Wallet-style perforated ticket with dynamic rotating QR code for turnstile scanning.</p>
+               <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                 <strong class="text-slate-200 block mb-1">Key UX Decisions:</strong>
+                 • High-contrast typography for quick guard inspection<br>
+                 • Perforation notches signify physical ticket metaphor<br>
+                 • "Complete Check-in" primary gate trigger
+               </div>`,
+        component: 'Pass / Wallet-Ticket-Card + Dynamic-QR'
+      },
+      checkedin: {
+        title: '8. Active Checked-In Status',
+        desc: `<p><strong>UX Goal:</strong> Keep the visitor oriented throughout their in-office stay.</p>
+               <p><strong>Key Info:</strong> Check-in timestamp, live elapsed timer, guest Wi-Fi credentials, and persistent 1-tap Check-Out CTA.</p>
+               <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                 <strong class="text-slate-200 block mb-1">Key UX Decisions:</strong>
+                 • Sticky emerald "Checked In" status badge<br>
+                 • Instant copy for Guest Wi-Fi password<br>
+                 • Reception intercom speed dial
+               </div>`,
+        component: 'Dashboard / Active-Visitor-Hub'
+      },
+      checkedout: {
+        title: '9. Checked Out Summary',
+        desc: `<p><strong>UX Goal:</strong> Definitive closure confirming that the visitor is logged out of the building.</p>
+               <p><strong>Post-Visit Value:</strong> Total visit duration summary, host record updated, and instant 5-star experience rating.</p>
+               <div class="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400">
+                 <strong class="text-slate-200 block mb-1">Key UX Decisions:</strong>
+                 • Clear exit timestamp and duration tally<br>
+                 • Micro-feedback star rating for facility management<br>
+                 • Pass automatically revoked for security
+               </div>`,
+        component: 'Summary / Visit-Completion-Receipt'
+      }
+    };
+
+    // Navigation function
+    function goToScreen(screenId) {
+      currentScreen = screenId;
+
+      // Hide all screens
+      document.querySelectorAll('.screen-view').forEach(el => {
+        el.classList.add('hidden');
+      });
+
+      // Show target screen
+      const target = document.getElementById(`screen-${screenId}`);
+      if (target) {
+        target.classList.remove('hidden');
+      }
+
+      // Update active nav button
+      document.querySelectorAll('.screen-nav-btn').forEach(btn => {
+        if (btn.getAttribute('data-screen') === screenId) {
+          btn.classList.add('bg-blue-600', 'text-white', 'font-bold');
+          btn.classList.remove('text-slate-300');
+        } else {
+          btn.classList.remove('bg-blue-600', 'text-white', 'font-bold');
+          btn.classList.add('text-slate-300');
+        }
+      });
+
+      // Update Rationale Panel
+      const info = screenData[screenId] || screenData['entrance'];
+      document.getElementById('panel-title').innerText = info.title;
+      document.getElementById('panel-desc').innerHTML = info.desc;
+      document.getElementById('panel-component').innerText = info.component;
+
+      // Reset any alerts when navigating to OTP
+      if (screenId === 'otp') {
+        document.getElementById('otp-error-alert').classList.add('hidden');
+        document.getElementById('otp-expired-alert').classList.add('hidden');
+      }
+
+      // Start visit timer if on checked-in screen
+      if (screenId === 'checkedin') {
+        startVisitTimer();
+      } else {
+        stopVisitTimer();
+      }
+
+      // Scroll viewport to top
+      document.getElementById('mobile-viewport').scrollTop = 0;
+    }
+
+    // Tab Switching for Header Toolbar
+    function switchMainTab(tab) {
+      document.getElementById('view-interactive').classList.add('hidden');
+      document.getElementById('view-mockup').classList.add('hidden');
+      document.getElementById('view-grid').classList.add('hidden');
+      document.getElementById('view-flow').classList.add('hidden');
+      document.getElementById('view-figma').classList.add('hidden');
+
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white', 'font-semibold');
+        btn.classList.add('text-slate-400');
+      });
+
+      if (tab === 'interactive') {
+        document.getElementById('view-interactive').classList.remove('hidden');
+        document.getElementById('tab-interactive').classList.add('bg-blue-600', 'text-white', 'font-semibold');
+        document.getElementById('tab-interactive').classList.remove('text-slate-400');
+      } else if (tab === 'mockup') {
+        document.getElementById('view-mockup').classList.remove('hidden');
+        document.getElementById('tab-mockup').classList.add('bg-blue-600', 'text-white', 'font-semibold');
+        document.getElementById('tab-mockup').classList.remove('text-slate-400');
+      } else if (tab === 'grid') {
+        document.getElementById('view-grid').classList.remove('hidden');
+        document.getElementById('tab-grid').classList.add('bg-blue-600', 'text-white', 'font-semibold');
+        document.getElementById('tab-grid').classList.remove('text-slate-400');
+      } else if (tab === 'flow') {
+        document.getElementById('view-flow').classList.remove('hidden');
+        document.getElementById('tab-flow').classList.add('bg-blue-600', 'text-white', 'font-semibold');
+        document.getElementById('tab-flow').classList.remove('text-slate-400');
+      } else if (tab === 'figma') {
+        document.getElementById('view-figma').classList.remove('hidden');
+        document.getElementById('tab-figma').classList.add('bg-blue-600', 'text-white', 'font-semibold');
+        document.getElementById('tab-figma').classList.remove('text-slate-400');
+      }
+    }
+
+    // OTP State Handlers
+    function setOtpState(state) {
+      goToScreen('otp');
+      const err = document.getElementById('otp-error-alert');
+      const exp = document.getElementById('otp-expired-alert');
+
+      if (state === 'error') {
+        err.classList.remove('hidden');
+        exp.classList.add('hidden');
+        document.querySelectorAll('.otp-box').forEach(b => b.classList.add('border-rose-500', 'bg-rose-50'));
+        showToast('Testing OTP Error State');
+      } else if (state === 'expired') {
+        exp.classList.remove('hidden');
+        err.classList.add('hidden');
+        document.getElementById('otp-countdown').innerText = '00:00';
+        showToast('Testing OTP Expired State');
+      }
+    }
+
+    function resendOtp() {
+      document.getElementById('otp-countdown').innerText = '00:30';
+      document.getElementById('otp-error-alert').classList.add('hidden');
+      document.getElementById('otp-expired-alert').classList.add('hidden');
+      document.querySelectorAll('.otp-box').forEach(b => {
+        b.classList.remove('border-rose-500', 'bg-rose-50');
+      });
+      showToast('New OTP sent to +91 98765 43210');
+    }
+
+    function verifyOtpAndProceed() {
+      showToast('Mobile verified successfully!');
+      setTimeout(() => {
+        goToScreen('details');
+      }, 400);
+    }
+
+    // Purpose Selection
+    function selectPurpose(btn, purpose) {
+      document.querySelectorAll('.purpose-pill').forEach(b => {
+        b.classList.remove('border-blue-600', 'bg-blue-50', 'text-blue-700', 'font-semibold');
+        b.classList.add('border-slate-200', 'bg-white', 'text-slate-700', 'font-medium');
+      });
+      btn.classList.add('border-blue-600', 'bg-blue-50', 'text-blue-700', 'font-semibold');
+      btn.classList.remove('border-slate-200', 'bg-white', 'text-slate-700');
+    }
+
+    // Submit Request
+    function submitVisitRequest() {
+      showToast('Request sent to Sarah Jenkins');
+      goToScreen('pending');
+    }
+
+    // Host Actions Simulation
+    function hostApprove() {
+      showToast('Sarah Jenkins approved the visit!');
+      setTimeout(() => {
+        goToScreen('pass');
+      }, 500);
+    }
+
+    function hostReject() {
+      showToast('Sarah Jenkins declined the visit');
+      setTimeout(() => {
+        goToScreen('rejected');
+      }, 500);
+    }
+
+    function confirmCheckIn() {
+      showToast('Check-in confirmed! Welcome to Nexus Tower.');
+      setTimeout(() => {
+        goToScreen('checkedin');
+      }, 400);
+    }
+
+    // Checkout Modal
+    function openCheckoutModal() {
+      document.getElementById('modal-checkout').classList.remove('hidden');
+    }
+
+    function closeCheckoutModal() {
+      document.getElementById('modal-checkout').classList.add('hidden');
+    }
+
+    function confirmCheckOut() {
+      closeCheckoutModal();
+      showToast('Checked out successfully. Safe travels!');
+      setTimeout(() => {
+        goToScreen('checkedout');
+      }, 350);
+    }
+
+    // Visit Timer
+    function startVisitTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        visitSeconds++;
+        const hours = String(Math.floor(visitSeconds / 3600)).padStart(2, '0');
+        const minutes = String(Math.floor((visitSeconds % 3600) / 60)).padStart(2, '0');
+        const seconds = String(visitSeconds % 60).padStart(2, '0');
+        const clockEl = document.getElementById('visit-timer');
+        if (clockEl) clockEl.innerText = `${hours}:${minutes}:${seconds}`;
+      }, 1000);
+    }
+
+    function stopVisitTimer() {
+      if (timerInterval) clearInterval(timerInterval);
+    }
+
+    // Reset Demo
+    function resetDemo() {
+      visitSeconds = 18 * 60 + 42;
+      goToScreen('entrance');
+      showToast('Demo restarted from Entrance QR');
+    }
+
+    // Toast Notification helper
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastText = document.getElementById('toast-text');
+      toastText.innerText = msg;
+      toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+      }, 2500);
+    }
+
+    // Copy Case Study
+    function copyCaseStudyText() {
+      const text = `SwiftPass VMS — Visitor Check-in & Check-out UX Case Study
+Objective: Deliver a frictionless, mobile-first visitor experience starting with an entrance QR scan.
+
+Key UX Decisions:
+1. Zero App Download: Scanning physical entrance signage opens an ultra-fast web PWA.
+2. Progressive Disclosure: Phone -> OTP -> Visit Purpose & Host -> Instant Review.
+3. Apple Wallet-Metaphor Digital Pass: Replaces wasteful paper stickers with dynamic rotating QR tokens.
+4. Autonomous 1-Tap Check-out: Solves the #1 flaw of traditional VMS (visitors leaving without signing out).
+5. Comprehensive Edge-case Coverage: OTP Error, OTP Expired, Host Rejection with Reception desk escalation.`;
+
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Case study text copied to clipboard!');
+      });
+    }
+
+    // Live clock update
+    function updateClock() {
+      const now = new Date();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const clock = document.getElementById('live-clock');
+      if (clock) clock.innerText = `${hours}:${minutes}`;
+    }
+    setInterval(updateClock, 30000);
+    updateClock();
+
+    // Initialize Lucide icons
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      goToScreen('entrance');
+    });
+  </script>
+</body>
+</html>
